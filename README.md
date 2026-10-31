@@ -26,9 +26,22 @@ Requires macOS 14+, AirPods Pro or another headphone that supports head tracking
 
 | Screen | What it does |
 |---|---|
+| **Read Aloud** | Read a passage out loud; each recognized word is cut from the motion stream and saved as a voiced take. Includes the voiced→mouthed transfer check. |
 | **Sensors** | Live plots of user acceleration, rotation rate and attitude, the measured sample rate, a mic input picker and level meter, and a recorder for experiment sessions. |
 | **Train** | Pick a word, hold **Space**, mouth it, release. Each take is stored as a template. **Evaluate** runs leave-one-out classification and a 500× label-permutation test, then shows accuracy against chance, a p-value and a confusion matrix. The feature checkboxes (acceleration / rotation / attitude) let you test which channels carry the signal. |
 | **Decode** | The motion-to-text screen. Hold Space, or use auto-detect after calibrating the noise floor. Each segment is DTW-matched against your templates and added to the transcript. A live mic transcript runs alongside it for comparison. |
+
+## Read Aloud (train by speaking, decode mouthing)
+
+Recording 8–10 held-Space takes per word is slow. The **Read Aloud** screen lets you train by reading text out loud instead:
+
+1. Pick a practice passage (or paste your own) and press **Start reading**. Read at a normal pace with your head still.
+2. Each word the on-device speech recognizer finalizes comes back with start/end timestamps. Those are put on the motion clock (both use host time) and the matching slice of AirPods motion is saved as a **voiced** take of that word.
+3. By default only the words in the target list are kept (the passages repeat a 12-word command set), because 1-NN matching needs several takes per word. Turn the filter off, or use "every word in this passage", to learn everything you say.
+4. On **Decode**, mouth the words silently. Under *Last segment*, tap what you actually mouthed: that fixes the transcript and saves the segment as a **mouthed** take, so the decoder adapts from your speaking motion to your mouthing motion.
+5. **Does reading aloud transfer to mouthing?** trains only on voiced takes and tests on your mouthed takes, with chance for comparison. This is the honest number: speaking and mouthing move the jaw differently, so expect transfer to be partial and corrections to matter.
+
+Decode settings: *Use read-aloud takes* (on by default) and *Min takes per word* (default 3) control which words the decoder considers. If AirPods motion lags the mic on your setup, adjust *Motion/audio offset*. The built-in Mac mic works best; using the AirPods mic switches them to the HFP call profile.
 
 ## How decoding works
 

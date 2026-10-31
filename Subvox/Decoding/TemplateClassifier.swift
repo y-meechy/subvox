@@ -1,10 +1,22 @@
 import Foundation
 
 struct Template: Codable, Identifiable, Hashable, Sendable {
+    /// How the take was produced. Older datasets have no source; treat those as mouthed,
+    /// since the original Train screen only recorded mouthed takes.
+    enum Source: String, Codable, Sendable {
+        /// Cut automatically from a passage read out loud (Read Aloud screen).
+        case voiced
+        /// Silently mouthed, recorded on Train or confirmed/corrected on Decode.
+        case mouthed
+    }
+
     var id = UUID()
     var label: String
     var samples: [MotionSample]
     var createdAt = Date()
+    var source: Source? = nil
+
+    var isVoiced: Bool { source == .voiced }
 
     var duration: TimeInterval {
         guard let first = samples.first, let last = samples.last else { return 0 }
@@ -148,5 +160,44 @@ struct Evaluation: Sendable {
             pValue: Double(atLeast + 1) / Double(permutations + 1),
             permutations: permutations,
             templateCount: n)
+    }
+}
+
+/// The question the Read Aloud mode depends on: if you train only on words read out loud,
+/// how well does it recognize the same words when they are only mouthed?
+struct TransferEvaluation: Sendable {
+    var labels: [String]
+    /// confusion[actual][predicted], over mouthed takes.
+    var confusion: [[Int]]
+    var accuracy: Double
+    /// 1 / number of candidate words.
+    var chance: Double
+    var tested: Int
+    var voicedTakes: Int
+
+    static func run(templates: [Template], featureSet: FeatureSet) -> TransferEvaluation? {
+        let voiced = templates.filter(\.isVoiced)
+        let voicedLabels = Set(voiced.map(\.label))
+        let mouthed = templates.filter { !$0.isVoiced && voicedLabels.contains($0.label) }
+        guard voicedLabels.count >= 2, !mouthed.isEmpty,
+              let classifier = TemplateClassifier(templates: voiced, featureSet: featureSet) else { return nil }
+
+        let labels = Array(voicedLabels).sorted()
+        let index = Dictionary(uniqueKeysWithValues: labels.enumerated().map { ($1, $0) })
+        var confusion = [[Int]](repeating: [Int](repeating: 0, count: labels.count), count: labels.count)
+        var correct = 0
+        for take in mouthed {
+            guard let best = classifier.rank(take.samples).first?.label,
+                  let a = index[take.label], let p = index[best] else { continue }
+            confusion[a][p] += 1
+            if a == p { correct += 1 }
+        }
+        return TransferEvaluation(
+            labels: labels,
+            confusion: confusion,
+            accuracy: Double(correct) / Double(mouthed.count),
+            chance: 1 / Double(labels.count),
+            tested: mouthed.count,
+            voicedTakes: voiced.count)
     }
 }

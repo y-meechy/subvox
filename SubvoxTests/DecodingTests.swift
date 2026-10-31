@@ -65,4 +65,59 @@ final class DecodingTests: XCTestCase {
         XCTAssertLessThan(trimmed.count, 40)
         XCTAssertGreaterThanOrEqual(trimmed.count, 20)
     }
+
+    // MARK: Read aloud
+
+    func testNormalizeStripsPunctuationAndCase() {
+        XCTAssertEqual(WordAligner.normalize("Next,"), "next")
+        XCTAssertEqual(WordAligner.normalize("\"Stop!\""), "stop")
+        XCTAssertEqual(WordAligner.normalize("Don’t"), "don't")
+        XCTAssertEqual(WordAligner.normalize("..."), "")
+        XCTAssertEqual(WordAligner.words(in: "Play. Pause, play again — STOP"), ["play", "pause", "again", "stop"])
+    }
+
+    func testSliceCutsTheSpokenWordWithPadding() throws {
+        let stream = (0..<250).map { MotionSample(t: 100 + Double($0) / 25) } // 10 s at 25 Hz
+        let word = TimedWord(text: "next", start: 103.0, end: 103.4)
+        let slice = try XCTUnwrap(WordAligner.slice(stream, for: word, padding: 0.1))
+        XCTAssertGreaterThanOrEqual(slice.first!.t, 102.9 - 1e-9)
+        XCTAssertLessThanOrEqual(slice.last!.t, 103.5 + 1e-9)
+        XCTAssertEqual(slice.count, 16)
+
+        let shifted = try XCTUnwrap(WordAligner.slice(stream, for: word, padding: 0.1, offset: 0.2))
+        XCTAssertGreaterThanOrEqual(shifted.first!.t, 103.1 - 1e-9)
+
+        let blip = TimedWord(text: "a", start: 105.0, end: 105.01)
+        XCTAssertNil(WordAligner.slice(stream, for: blip, padding: 0))
+        let outside = TimedWord(text: "late", start: 200, end: 200.5)
+        XCTAssertNil(WordAligner.slice(stream, for: outside))
+    }
+
+    func testOldDatasetsDecodeWithoutSource() throws {
+        let old = #"{"id":"9C1B7F2E-3D7B-4B8A-9E43-2B1C5A6D7E8F","label":"yes","samples":[],"createdAt":0}"#
+        let template = try JSONDecoder().decode(Template.self, from: Data(old.utf8))
+        XCTAssertNil(template.source)
+        XCTAssertFalse(template.isVoiced)
+    }
+
+    func testTransferUsesOnlyVoicedTakesForTraining() throws {
+        var templates: [Template] = []
+        for _ in 0..<5 {
+            templates.append(Template(label: "yes", samples: take(2, axis: 0), source: .voiced))
+            templates.append(Template(label: "no", samples: take(3, axis: 1), source: .voiced))
+        }
+        // Mouthed takes that resemble the voiced ones: transfer should work.
+        for _ in 0..<4 {
+            templates.append(Template(label: "yes", samples: take(2, axis: 0), source: .mouthed))
+            templates.append(Template(label: "no", samples: take(3, axis: 1), source: .mouthed))
+        }
+        let result = try XCTUnwrap(TransferEvaluation.run(templates: templates, featureSet: .all))
+        XCTAssertEqual(result.tested, 8)
+        XCTAssertEqual(result.voicedTakes, 10)
+        XCTAssertGreaterThan(result.accuracy, 0.8)
+        XCTAssertEqual(result.chance, 0.5, accuracy: 1e-9)
+
+        // No mouthed takes → nothing to test.
+        XCTAssertNil(TransferEvaluation.run(templates: templates.filter(\.isVoiced), featureSet: .all))
+    }
 }

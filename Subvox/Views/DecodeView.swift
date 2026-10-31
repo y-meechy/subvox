@@ -9,7 +9,7 @@ struct DecodeView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 if model.classifier == nil {
-                    Label("Train at least two words in the Train tab first.", systemImage: "exclamationmark.triangle")
+                    Label("Read a passage aloud or train at least two words first (each needs \(model.minTakes)+ takes).", systemImage: "exclamationmark.triangle")
                         .foregroundStyle(.orange)
                 }
                 controls
@@ -56,6 +56,16 @@ struct DecodeView: View {
                         Slider(value: $model.minConfidence, in: 0...0.5).frame(width: 140)
                         Text(String(format: "%.2f", model.minConfidence)).monospacedDigit().frame(width: 36)
                     }
+                }
+                .font(.callout)
+
+                HStack(spacing: 24) {
+                    Toggle("Use read-aloud takes", isOn: $model.includeVoiced)
+                        .toggleStyle(.checkbox)
+                    Stepper("Min takes per word: \(model.minTakes)", value: $model.minTakes, in: 1...10)
+                        .fixedSize()
+                    Text("\(model.decodingVocabulary.count) words active")
+                        .foregroundStyle(.secondary)
                 }
                 .font(.callout)
             }
@@ -131,7 +141,7 @@ struct DecodeView: View {
     private var decodedText: Text {
         model.decoded.reduce(Text("")) { text, word in
             let piece = Text(word.text + " ")
-            return text + (word.prediction.accepted ? piece : piece.foregroundColor(.secondary.opacity(0.4)))
+            return text + (word.isAccepted ? piece : piece.foregroundColor(.secondary.opacity(0.4)))
         }
     }
 
@@ -142,7 +152,7 @@ struct DecodeView: View {
             VStack(alignment: .leading, spacing: 8) {
                 if let prediction = model.decoded.last?.prediction {
                     let worst = prediction.ranked.last?.distance ?? 1
-                    ForEach(prediction.ranked) { candidate in
+                    ForEach(prediction.ranked.prefix(8)) { candidate in
                         HStack {
                             Text(candidate.label).frame(width: 70, alignment: .leading)
                             LevelMeter(value: 1 - candidate.distance / max(worst * 1.2, 1e-6),
@@ -156,6 +166,7 @@ struct DecodeView: View {
                                 prediction.accepted ? "accepted" : "rejected"))
                         .font(.caption)
                         .foregroundStyle(.secondary)
+                    correctionRow(prediction)
                     SignalPlot(title: "Rotation rate", samples: model.lastSegment,
                                channels: SignalPlot.rotation, minScale: 0.05, height: 60)
                 } else {
@@ -166,6 +177,33 @@ struct DecodeView: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(6)
+        }
+    }
+
+    /// Tap what you actually mouthed. Each tap saves the segment as a mouthed take,
+    /// which is how read-aloud training adapts to silent mouthing.
+    private func correctionRow(_ prediction: Prediction) -> some View {
+        let corrected = model.decoded.last?.corrected
+        let choices = Array(prediction.ranked.prefix(6).map(\.label))
+        return VStack(alignment: .leading, spacing: 6) {
+            Text(corrected.map { "Saved as a mouthed take of “\($0)”." } ?? "What did you mouth? Tapping saves it as a take:")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            if corrected == nil {
+                HStack {
+                    ForEach(choices, id: \.self) { label in
+                        Button(label) { model.correctLast(to: label) }
+                            .buttonStyle(.bordered)
+                            .tint(label == prediction.best?.label ? .green : nil)
+                    }
+                    Menu("Other…") {
+                        ForEach(model.decodingVocabulary.filter { !choices.contains($0) }, id: \.self) { label in
+                            Button(label) { model.correctLast(to: label) }
+                        }
+                    }
+                    .fixedSize()
+                }
+            }
         }
     }
 

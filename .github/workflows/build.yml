@@ -1,0 +1,22 @@
+name: Build & test
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  macos:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install XcodeGen
+        run: brew install xcodegen
+      - name: Generate project
+        run: xcodegen generate
+      - name: Build and test (unsigned)
+        run: |
+          xcodebuild -project Subvox.xcodeproj -scheme Subvox \
+            -destination 'platform=macOS' -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGN_IDENTITY="" DEVELOPMENT_TEAM="" \
+            test
