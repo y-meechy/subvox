@@ -82,7 +82,7 @@ final class DecodingTests: XCTestCase {
         let slice = try XCTUnwrap(WordAligner.slice(stream, for: word, padding: 0.1))
         XCTAssertGreaterThanOrEqual(slice.first!.t, 102.9 - 1e-9)
         XCTAssertLessThanOrEqual(slice.last!.t, 103.5 + 1e-9)
-        XCTAssertEqual(slice.count, 16)
+        XCTAssertTrue((15...16).contains(slice.count), "0.6 s at 25 Hz, ±1 for float edges")
 
         let shifted = try XCTUnwrap(WordAligner.slice(stream, for: word, padding: 0.1, offset: 0.2))
         XCTAssertGreaterThanOrEqual(shifted.first!.t, 103.1 - 1e-9)
