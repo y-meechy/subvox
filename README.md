@@ -26,10 +26,17 @@ Requires macOS 14+, AirPods Pro or another headphone that supports head tracking
 
 | Screen | What it does |
 |---|---|
+| **Whisper Test** | Hold Space, whisper a sentence, and see how much Parakeet and Apple dictation got right at that loudness. |
 | **Read Aloud** | Read a passage out loud; each recognized word is cut from the motion stream and saved as a voiced take. Includes the voiced→mouthed transfer check. |
 | **Sensors** | Live plots of user acceleration, rotation rate and attitude, the measured sample rate, a mic input picker and level meter, and a recorder for experiment sessions. |
 | **Train** | Pick a word, hold **Space**, mouth it, release. Each take is stored as a template. **Evaluate** runs leave-one-out classification and a 500× label-permutation test, then shows accuracy against chance, a p-value and a confusion matrix. The feature checkboxes (acceleration / rotation / attitude) let you test which channels carry the signal. |
 | **Decode** | The motion-to-text screen. Hold Space, or use auto-detect after calibrating the noise floor. Each segment is DTW-matched against your templates and added to the transcript. A live mic transcript runs alongside it for comparison. |
+
+## Whisper Test (Parakeet vs Apple)
+
+How quietly can you whisper and still be understood? Open **Whisper Test**, download Parakeet once (about 500 MB, via [FluidAudio](https://github.com/FluidInference/FluidAudio); runs on the Neural Engine, nothing leaves your Mac), start the mic and hold Space while you whisper the sentence shown.
+
+Each take gets your whisper level (dBFS), how far it stood above the room noise, and the share of words Parakeet and Apple dictation got right on the same audio. The chart plots accuracy against loudness, so the point where it drops off is your threshold. English and German sentences are included; Parakeet detects the language itself.
 
 ## Read Aloud (train by speaking, decode mouthing)
 
