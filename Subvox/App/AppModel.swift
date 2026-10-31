@@ -22,6 +22,7 @@ final class AppModel {
     enum Screen: String, CaseIterable, Identifiable {
         case sensors = "Sensors"
         case readAloud = "Read Aloud"
+        case whisper = "Whisper Test"
         case train = "Train"
         case decode = "Decode"
         var id: String { rawValue }
@@ -29,6 +30,7 @@ final class AppModel {
             switch self {
             case .sensors: "waveform.path.ecg"
             case .readAloud: "text.book.closed"
+            case .whisper: "ear"
             case .train: "square.stack.3d.up"
             case .decode: "text.bubble"
             }
@@ -40,6 +42,7 @@ final class AppModel {
     let transcriber = MicTranscriber()
     let capture = CaptureController()
     let recorder = SessionRecorder()
+    @ObservationIgnored lazy var whisper = WhisperTester(audio: audio)
 
     var screen: Screen = .train {
         didSet { syncCaptureMode() }
@@ -134,7 +137,7 @@ final class AppModel {
                               label: prediction.best?.label ?? "", confidence: prediction.confidence)
         case .sensors:
             recorder.logEvent(segment, kind: "segment", label: recorder.prompt, confidence: nil)
-        case .readAloud:
+        case .readAloud, .whisper:
             break
         }
     }
@@ -147,7 +150,15 @@ final class AppModel {
             let isDown = event.type == .keyDown
             let isRepeat = isDown && event.isARepeat
             let consumed = MainActor.assumeIsolated { () -> Bool in
-                guard let self, self.spaceCapturesMotion else { return false }
+                guard let self else { return false }
+                if self.screen == .whisper {
+                    // Space = hold to whisper (unless typing in the sentence field).
+                    if NSApp.keyWindow?.firstResponder is NSText { return false }
+                    guard self.whisper.canRecord || self.whisper.isRecording else { return false }
+                    if !isDown { self.whisper.end() } else if !isRepeat { self.whisper.begin() }
+                    return true
+                }
+                guard self.spaceCapturesMotion else { return false }
                 if !isDown {
                     self.capture.end()
                 } else if !isRepeat {
@@ -166,7 +177,7 @@ final class AppModel {
         case .train: return selectedWord != nil
         case .decode: return decodeMode == .hold && classifier != nil
         case .sensors: return recorder.isRecording
-        case .readAloud: return false
+        case .readAloud, .whisper: return false
         }
     }
 

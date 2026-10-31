@@ -13,6 +13,7 @@ struct ContentView: View {
             switch model.screen {
             case .sensors: SensorsView()
             case .readAloud: ReadAloudView()
+            case .whisper: WhisperView()
             case .train: TrainView()
             case .decode: DecodeView()
             }

@@ -120,4 +120,29 @@ final class DecodingTests: XCTestCase {
         // No mouthed takes → nothing to test.
         XCTAssertNil(TransferEvaluation.run(templates: templates.filter(\.isVoiced), featureSet: .all))
     }
+
+    // MARK: Whisper test
+
+    func testWordErrorRate() {
+        XCTAssertEqual(WordErrorRate.compute(reference: "Set a timer for twenty minutes.", hypothesis: "set a timer for twenty minutes"), 0)
+        // One substitution out of six words.
+        XCTAssertEqual(WordErrorRate.compute(reference: "set a timer for twenty minutes", hypothesis: "set a timer for thirty minutes"), 1.0 / 6, accuracy: 1e-9)
+        // Deletion and insertion.
+        XCTAssertEqual(WordErrorRate.compute(reference: "please turn it down", hypothesis: "turn it down now"), 0.5, accuracy: 1e-9)
+        XCTAssertEqual(WordErrorRate.compute(reference: "hello there", hypothesis: ""), 1)
+        XCTAssertEqual(WordErrorRate.accuracy(reference: "yes", hypothesis: "no no no"), 0)
+        XCTAssertEqual(WordErrorRate.compute(reference: "Mach die Musik leiser.", hypothesis: "mach die musik leiser"), 0)
+    }
+
+    func testLoudnessSeparatesWhisperFromRoom() {
+        let rate = 16_000.0
+        // 1 s of quiet room noise (~-60 dBFS) then 1 s of a louder tone (~-23 dBFS).
+        let quiet = (0..<16_000).map { _ in Float.random(in: -0.001...0.001) }
+        let tone = (0..<16_000).map { i in Float(0.1 * sin(2 * Double.pi * 300 * Double(i) / rate)) }
+        let stats = LoudnessStats.measure(quiet + tone, sampleRate: rate)
+        XCTAssertEqual(stats.speechDB, -23, accuracy: 1.5)
+        XCTAssertLessThan(stats.noiseDB, -55)
+        XCTAssertGreaterThan(stats.signalToNoise, 30)
+        XCTAssertEqual(LoudnessStats.measure([], sampleRate: rate).speechDB, LoudnessStats.silenceDB)
+    }
 }
